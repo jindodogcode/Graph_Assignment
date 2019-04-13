@@ -1,0 +1,27 @@
+New York, NY: 40, -74
+Washington, DC: 38, -77
+Atlanta, GA: 33, -84
+Detroit, MI: 42, -83
+Chicago, IL: 41, -87
+Dallas, TX: 32, -96
+Denver, CO: 39, -104
+Los Angeles, CA: 34, -118
+Seattle, WA: 47, -122
+San Francisco, CA: 37, -122
+#####
+New York, NY: Washington, DC
+Washington, DC: Atlanta, GA
+New York, NY: Detroit, MI
+New York, NY: Chicago, IL
+Washington, DC: Chicago, IL
+Atlanta, GA: Dallas, TX
+Detroit, MI: Chicago, IL
+Detroit, MI: Seattle, WA
+Chicago, IL: Dallas, TX
+Chicago, IL: Denver, CO
+Dallas, TX: Los Angeles, CA
+Denver, CO: Seattle, WA
+Denver, CO: San Francisco, CA
+Denver, CO: Los Angeles, CA
+San Francisco, CA: Seattle, WA
+San Francisco, CA: Los Angeles, CA

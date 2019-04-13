@@ -1,0 +1,10 @@
+[workspace]
+
+members = [
+    "graph-lib",
+    "web-bind",
+]
+
+[profile.release]
+lto = true
+codegen-units = 1
