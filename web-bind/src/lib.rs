@@ -1,27 +1,26 @@
+mod canvas_state;
 mod city;
+mod consts;
 
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 
-use city::{City, Conn};
 use graph_lib::graph::Graph;
 use graph_lib::make_graph;
 
-const CONN_COLOR: &str = "#f33";
-const CITY_COLOR: &str = "#000";
-const SPECIAL_CONN_COLOR: &str = "#3f7";
-const SPECIAL_CITY_COLOR: &str = "#37f";
-const TEXT_COLOR: &str = "#ddd";
+use canvas_state::CanvasState;
+use city::{City, Conn};
+use consts::*;
 
 #[wasm_bindgen(start)]
 pub fn run() -> Result<(), JsValue> {
     init_panic_hook();
 
-    let graph = make_graph();
-
+    // Get DOM references
     let window = web_sys::window().unwrap();
     let window = Rc::new(window);
     let document = window.document().unwrap();
@@ -39,14 +38,6 @@ pub fn run() -> Result<(), JsValue> {
         .unwrap();
     let context = Rc::new(context);
 
-    // let window_resize_listener =
-    //     make_window_resize_listener(Rc::clone(&window), Rc::clone(&canvas));
-    // window.add_event_listener_with_callback(
-    //     "resize",
-    //     window_resize_listener.as_ref().unchecked_ref(),
-    // )?;
-    // window_resize_listener.forget();
-
     // Assign canvas dimensions
     let win_width = window.inner_width().unwrap().as_f64().unwrap();
     let canvas_width = win_width * (2.0 / 3.0);
@@ -58,108 +49,47 @@ pub fn run() -> Result<(), JsValue> {
         .set_attribute("height", &canvas_height.to_string())
         .unwrap();
 
+    let graph = make_graph();
     let (cities, connections) = map_nodes(&graph, canvas_height, canvas_width);
-    let cities = Rc::new(cities);
-    let connections = Rc::new(connections);
+    let canvas_state = Rc::new(RefCell::new(CanvasState::new(cities, connections)));
 
-    // Draw connections
-    draw_all_connections(&cities, &connections, &context, &CONN_COLOR.into());
-
-    // Draw cities
-    draw_all_cities(&cities, &context, &CITY_COLOR.into());
+    // Draw initial canvas
+    canvas_state.borrow().draw(&canvas, &context);
 
     // Create tooltips
-    setup_tooltips(&document, Rc::clone(&canvas), Rc::clone(&cities))?;
+    setup_tooltips(
+        &document,
+        Rc::clone(&canvas),
+        Rc::clone(&context),
+        Rc::clone(&canvas_state),
+    )?;
 
     // Make cities list
     make_cities_list(
         &document,
-        &graph,
-        Rc::clone(&cities),
-        Rc::clone(&connections),
         Rc::clone(&canvas),
         Rc::clone(&context),
+        Rc::clone(&canvas_state),
     )?;
+
+    let window_resize_listener = make_window_resize_listener(
+        Rc::clone(&window),
+        Rc::clone(&canvas),
+        Rc::clone(&context),
+        Rc::new(graph),
+        Rc::clone(&canvas_state),
+    );
+    window.add_event_listener_with_callback(
+        "resize",
+        window_resize_listener.as_ref().unchecked_ref(),
+    )?;
+    window_resize_listener.forget();
 
     Ok(())
 }
 
-fn draw_all_cities(
-    cities: &HashMap<String, City>,
-    context: &web_sys::CanvasRenderingContext2d,
-    color: &JsValue,
-) {
-    for (_, city) in cities.iter() {
-        city.draw(&context, color);
-    }
-}
-fn draw_all_connections(
-    cities: &HashMap<String, City>,
-    connections: &HashSet<Conn>,
-    context: &web_sys::CanvasRenderingContext2d,
-    color: &JsValue,
-) {
-    for Conn(src, dest) in connections.iter() {
-        let src_x = cities[src].x();
-        let src_y = cities[src].y();
-        let dest_x = cities[dest].x();
-        let dest_y = cities[dest].y();
-
-        context.set_stroke_style(color);
-        context.begin_path();
-
-        context.move_to(src_x, src_y);
-        context.line_to(dest_x, dest_y);
-
-        context.close_path();
-        context.stroke();
-    }
-}
-
-fn redraw_with_color(
-    cities: &HashMap<String, City>,
-    connections: &HashSet<Conn>,
-    select_city: &str,
-    context: &web_sys::CanvasRenderingContext2d,
-    color: &JsValue,
-    special_color: &JsValue,
-    city_color: &JsValue,
-    special_city_color: &JsValue,
-) {
-    for Conn(src, dest) in connections.iter() {
-        if select_city == src || select_city == dest {
-            context.set_stroke_style(special_color);
-        } else {
-            context.set_stroke_style(color);
-        }
-        let src_x = cities[src].x();
-        let src_y = cities[src].y();
-        let dest_x = cities[dest].x();
-        let dest_y = cities[dest].y();
-
-        context.begin_path();
-        context.move_to(src_x, src_y);
-        context.line_to(dest_x, dest_y);
-        context.close_path();
-        context.stroke();
-    }
-
-    for (name, city) in cities.iter() {
-        if select_city == name {
-            city.draw(context, special_city_color);
-        } else {
-            city.draw(context, city_color);
-        }
-    }
-}
-
+/// Maps coordinates stored in the Graph to coordinates on the canvas
 fn map_nodes(graph: &Graph, height: f64, width: f64) -> (HashMap<String, City>, HashSet<Conn>) {
-    const US_NORTH: f64 = 49_23_04.0;
-    const US_SOUTH: f64 = 24_26_80.0;
-    const US_WEST: f64 = -124_47_10.0;
-    const US_EAST: f64 = -66_56_59.0;
-    const DOT_RADIUS: f64 = 5.0;
-
     let height_pad = height * 0.1;
     let width_pad = width * 0.1;
     let height = height - height_pad;
@@ -192,6 +122,7 @@ fn map_nodes(graph: &Graph, height: f64, width: f64) -> (HashMap<String, City>, 
     (mapped_nodes, connections)
 }
 
+/// Better wasm errors.
 fn init_panic_hook() {
     console_error_panic_hook::set_once();
 }
@@ -199,9 +130,10 @@ fn init_panic_hook() {
 fn setup_tooltips(
     document: &web_sys::Document,
     canvas: Rc<web_sys::HtmlCanvasElement>,
-    cities: Rc<HashMap<String, City>>,
+    context: Rc<web_sys::CanvasRenderingContext2d>,
+    canvas_state: Rc<RefCell<CanvasState>>,
 ) -> Result<(), JsValue> {
-    let canvas_2 = Rc::clone(&canvas);
+    let listen_canvas = Rc::clone(&canvas);
 
     let tip_canvas = document.get_element_by_id("tip-canvas").unwrap();
     let tip_canvas: web_sys::HtmlCanvasElement = tip_canvas
@@ -222,21 +154,29 @@ fn setup_tooltips(
         let mouse_x = event.offset_x() as f64;
         let mouse_y = event.offset_y() as f64;
 
-        let mut hit = false;
+        let mut name_reminder: Option<String> = None;
 
-        for (name, city) in cities.iter() {
+        for (name, city) in canvas_state.borrow().cities().iter() {
             let dx = mouse_x - city.x();
             let dy = mouse_y - city.y();
 
             if dx * dx + dy * dy < (city.radius() + 1.0).powf(2.0) {
-                hit = true;
+                name_reminder = Some(name.to_owned());
+
+                tip_context.clear_rect(
+                    0.0,
+                    0.0,
+                    tip_canvas.width().into(),
+                    tip_canvas.height().into(),
+                );
+
                 let tip_text = format!("{} {} {}", name, city.x(), city.y());
                 let text_width = tip_context.measure_text(&tip_text).unwrap();
                 let text_width = text_width.width() + 6.0;
-                let x_offset = canvas.offset_left() - (text_width / 2.0) as i32;
-                let y_offset = canvas.offset_top() - 30;
-                let x_str = format!("{}px", mouse_x as i64 + x_offset as i64);
-                let y_str = format!("{}px", mouse_y as i64 + y_offset as i64);
+                let x_offset = listen_canvas.offset_left() - (text_width / 2.0) as i32;
+                let y_offset = listen_canvas.offset_top() - 30;
+                let x_str = format!("{}px", city.x() as i64 + x_offset as i64);
+                let y_str = format!("{}px", city.y() as i64 + y_offset as i64);
                 tip_canvas.style().set_property("display", "block").unwrap();
                 tip_canvas.style().set_property("left", &x_str).unwrap();
                 tip_canvas.style().set_property("top", &y_str).unwrap();
@@ -244,21 +184,21 @@ fn setup_tooltips(
                     .set_attribute("width", &text_width.to_string())
                     .unwrap();
                 tip_context.fill_text(&tip_text, 3.0, 15.0).unwrap();
+
                 break;
             }
         }
-        if !hit {
+        if let Some(name) = name_reminder {
+            canvas_state.borrow_mut().set_hovered(Some(name));
+            canvas_state.borrow().draw(&listen_canvas, &context);
+        } else {
             tip_canvas.style().set_property("display", "none").unwrap();
-            tip_context.clear_rect(
-                0.0,
-                0.0,
-                tip_canvas.width().into(),
-                tip_canvas.height().into(),
-            );
+            canvas_state.borrow_mut().set_hovered(None);
+            canvas_state.borrow().draw(&listen_canvas, &context);
         }
     }) as Box<dyn FnMut(_)>);
 
-    canvas_2
+    canvas
         .add_event_listener_with_callback("mousemove", tooltip_listener.as_ref().unchecked_ref())
         .unwrap();
     tooltip_listener.forget();
@@ -266,20 +206,19 @@ fn setup_tooltips(
     Ok(())
 }
 
+/// Creates list of cities on left side of windows and adds a mouseover listener.
 fn make_cities_list(
     document: &web_sys::Document,
-    graph: &Graph,
-    cities: Rc<HashMap<String, City>>,
-    connections: Rc<HashSet<Conn>>,
     canvas: Rc<web_sys::HtmlCanvasElement>,
     context: Rc<web_sys::CanvasRenderingContext2d>,
+    canvas_state: Rc<RefCell<CanvasState>>,
 ) -> Result<(), JsValue> {
-    let listen_out_context = Rc::clone(&context);
-    let listen_out_connections = Rc::clone(&connections);
+    let listen_in_state = Rc::clone(&canvas_state);
     let listen_out_canvas = Rc::clone(&canvas);
-    let listen_cities = Rc::clone(&cities);
+    let listen_out_context = Rc::clone(&context);
+    let listen_out_state = Rc::clone(&canvas_state);
 
-    // Mouse on listener for list
+    // mouseover listener for list
     let list_on_listener = Closure::wrap(Box::new(move |event: web_sys::Event| {
         let target = event.target().unwrap();
         let target = target
@@ -292,21 +231,11 @@ fn make_cities_list(
             .expect("element should have css");
         let name = target.inner_html();
 
-        context.save();
-        context.clear_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
-        redraw_with_color(
-            &listen_cities,
-            &connections,
-            &name,
-            &context,
-            &CONN_COLOR.into(),
-            &SPECIAL_CONN_COLOR.into(),
-            &CITY_COLOR.into(),
-            &SPECIAL_CITY_COLOR.into(),
-        );
+        listen_in_state.borrow_mut().set_hovered(Some(name));
+        listen_in_state.borrow().draw(&canvas, &context);
     }) as Box<dyn FnMut(_)>);
 
-    // Mouse out listener for list
+    // mouseout listener for list
     let list_out_listener = Closure::wrap(Box::new(move |event: web_sys::Event| {
         let target = event.target().unwrap();
         let target = target
@@ -318,25 +247,20 @@ fn make_cities_list(
             .set_property("color", TEXT_COLOR)
             .expect("element should have css");
 
-        listen_out_context.clear_rect(
-            0.0,
-            0.0,
-            listen_out_canvas.width() as f64,
-            listen_out_canvas.height() as f64,
-        );
-        draw_all_connections(
-            &cities,
-            &listen_out_connections,
-            &listen_out_context,
-            &CONN_COLOR.into(),
-        );
-        draw_all_cities(&cities, &listen_out_context, &CITY_COLOR.into());
+        listen_out_state.borrow_mut().set_hovered(None);
+        listen_out_state
+            .borrow()
+            .draw(&listen_out_canvas, &listen_out_context);
     }) as Box<dyn FnMut(_)>);
 
     let html_cities_list = document.create_element("ul")?;
     html_cities_list.set_attribute("id", "cities-list")?;
-    let mut sorted_cities: Vec<String> =
-        graph.nodes().iter().map(|(name, _)| name.clone()).collect();
+    let mut sorted_cities: Vec<String> = canvas_state
+        .borrow()
+        .cities()
+        .iter()
+        .map(|(name, _)| name.clone())
+        .collect();
     sorted_cities.sort_unstable();
     for city in sorted_cities.iter() {
         let html_city = document.create_element("li")?;
@@ -357,6 +281,10 @@ fn make_cities_list(
 
         html_cities_list.append_child(&html_city)?;
     }
+
+    list_on_listener.forget();
+    list_out_listener.forget();
+
     let left_sidebar = document.get_element_by_id("left-list-wrapper").unwrap();
     let left_para = document.create_element("p")?;
     left_para.set_attribute("id", "cities-list-title")?;
@@ -364,15 +292,16 @@ fn make_cities_list(
     left_sidebar.append_child(&left_para)?;
     left_sidebar.append_child(&html_cities_list)?;
 
-    list_on_listener.forget();
-    list_out_listener.forget();
-
     Ok(())
 }
 
+/// Adjust canvas size to window size.
 fn make_window_resize_listener(
     window: Rc<web_sys::Window>,
     canvas: Rc<web_sys::HtmlCanvasElement>,
+    context: Rc<web_sys::CanvasRenderingContext2d>,
+    graph: Rc<Graph>,
+    canvas_state: Rc<RefCell<CanvasState>>,
 ) -> Closure<(dyn FnMut(web_sys::Event) + 'static)> {
     Closure::wrap(Box::new(move |_| {
         let win_width = window.inner_width().unwrap().as_f64().unwrap();
@@ -384,5 +313,11 @@ fn make_window_resize_listener(
         canvas
             .set_attribute("height", &canvas_height.to_string())
             .unwrap();
+
+        let (cities, connections) = map_nodes(&graph, canvas_height, canvas_width);
+        canvas_state.borrow_mut().set_cities(cities);
+        canvas_state.borrow_mut().set_connections(connections);
+
+        canvas_state.borrow().draw(&canvas, &context);
     }) as Box<dyn FnMut(_)>)
 }
