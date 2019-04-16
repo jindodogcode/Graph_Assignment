@@ -1,7 +1,3 @@
-pub const US_NORTH: f64 = 49_23_04.0;
-pub const US_SOUTH: f64 = 24_26_80.0;
-pub const US_WEST: f64 = -124_47_10.0;
-pub const US_EAST: f64 = -66_56_59.0;
 pub const DOT_RADIUS: f64 = 5.0;
 
 pub const CONN_COLOR: &str = "#f33";

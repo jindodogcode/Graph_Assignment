@@ -1,27 +1,27 @@
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub struct Point {
-    row: i64,
-    col: i64,
+    row: f64,
+    col: f64,
 }
 
 // Associate functions
 impl Point {
-    pub fn new(row: i64, col: i64) -> Point {
+    pub fn new(row: f64, col: f64) -> Point {
         Point { row, col }
     }
 }
 
 // Public methods
 impl Point {
-    pub fn row(&self) -> i64 {
+    pub fn row(&self) -> f64 {
         self.row
     }
 
-    pub fn col(&self) -> i64 {
+    pub fn col(&self) -> f64 {
         self.col
     }
 
     pub fn dist(&self, other: &Point) -> f64 {
-        (((self.row - other.row).pow(2) + (self.col - other.col).pow(2)) as f64).sqrt()
+        ((self.row - other.row).powf(2.0) + (self.col - other.col).powf(2.0)).sqrt()
     }
 }

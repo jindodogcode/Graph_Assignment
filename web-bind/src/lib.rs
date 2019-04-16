@@ -10,7 +10,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 
 use graph_lib::graph::Graph;
-use graph_lib::make_graph;
+use graph_lib::{gstring_parse, make_graph};
 
 use canvas_state::CanvasState;
 use city::{City, Conn};
@@ -83,6 +83,8 @@ pub fn run() -> Result<(), JsValue> {
         "resize",
         window_resize_listener.as_ref().unchecked_ref(),
     )?;
+
+    // leaks memory
     window_resize_listener.forget();
 
     Ok(())
@@ -90,22 +92,28 @@ pub fn run() -> Result<(), JsValue> {
 
 /// Maps coordinates stored in the Graph to coordinates on the canvas
 fn map_nodes(graph: &Graph, height: f64, width: f64) -> (HashMap<String, City>, HashSet<Conn>) {
+    // These are the farthest points of the continential US
+    let us_north: f64 = gstring_parse("49°23'04\"");
+    let us_south: f64 = gstring_parse("24°26'80\"");
+    let us_west: f64 = gstring_parse("-124°47'10\"");
+    let us_east: f64 = gstring_parse("-66°56'59\"");
+
     let height_pad = height * 0.1;
     let width_pad = width * 0.1;
     let height = height - height_pad;
     let width = width - width_pad;
-    let height_ratio = height / (US_NORTH - US_SOUTH);
-    let height_offset = US_NORTH;
-    let width_ratio = width / (US_EAST - US_WEST);
-    let width_offset = US_WEST;
+    let height_ratio = height / (us_north - us_south);
+    let height_offset = us_north;
+    let width_ratio = width / (us_east - us_west);
+    let width_offset = us_west;
 
     let mut mapped_nodes: HashMap<String, City> = HashMap::with_capacity(graph.nodes().len());
     let mut connections: HashSet<Conn> = HashSet::new();
 
     for (id, node) in graph.nodes().iter() {
-        let row = (node.point().row() as f64 - height_offset) * height_ratio * -1.0;
+        let row = (node.point().row() - height_offset) * height_ratio * -1.0;
         let row = (row + (height_pad / 2.0)).round();
-        let col = (node.point().col() as f64 - width_offset) * width_ratio;
+        let col = (node.point().col() - width_offset) * width_ratio;
         let col = (col + (width_pad / 2.0)).round();
 
         mapped_nodes.insert(id.clone(), City::new(col, row, DOT_RADIUS));
@@ -201,6 +209,8 @@ fn setup_tooltips(
     canvas
         .add_event_listener_with_callback("mousemove", tooltip_listener.as_ref().unchecked_ref())
         .unwrap();
+
+    // leaks memory
     tooltip_listener.forget();
 
     Ok(())
@@ -282,6 +292,7 @@ fn make_cities_list(
         html_cities_list.append_child(&html_city)?;
     }
 
+    // leaks memory
     list_on_listener.forget();
     list_out_listener.forget();
 

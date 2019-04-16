@@ -1,8 +1,10 @@
-pub mod edge;
+pub mod dfs;
 pub mod node;
 pub mod point;
 
 use std::collections::HashMap;
+use std::error::Error;
+use std::fmt;
 
 use node::Node;
 use point::Point;
@@ -69,14 +71,38 @@ impl Graph {
 
     pub fn remove_edge(&mut self, id: &str, remove_id: &str) -> Option<f64> {
         if let Some(n) = self.nodes.get_mut(id) {
-            return n.remove_edge(remove_id);
+            n.remove_edge(remove_id)
         } else {
-            return None;
+            None
         }
     }
 
     pub fn len(&self) -> usize {
         self.nodes.len()
+    }
+
+    pub fn depth_first_search(
+        &self,
+        start: &str,
+        end: &str,
+    ) -> Result<Option<Vec<(String, f64)>>, DoesNotContainError> {
+        if !self.nodes.contains_key(start) || !self.nodes.contains_key(end) {
+            return Err(DoesNotContainError);
+        }
+
+        let mut search = dfs::DepthFirstSearch::new(&self, start, end);
+
+        while let dfs::Status::Searching = search.next() {}
+
+        Ok(search.result())
+    }
+
+    pub fn step_depth_first_search<'a>(
+        &'a self,
+        start: &'a str,
+        end: &'a str,
+    ) -> dfs::DepthFirstSearch<'a> {
+        dfs::DepthFirstSearch::new(&self, start, end)
     }
 }
 
@@ -88,4 +114,23 @@ impl Graph {
 
         one.point().dist(&two.point())
     }
+}
+
+#[derive(Debug)]
+pub struct DoesNotContainError;
+
+impl fmt::Display for DoesNotContainError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Graph does not contain that node.")
+    }
+}
+
+impl Error for DoesNotContainError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dfs() {}
 }
