@@ -2,59 +2,7 @@
     <head>
         <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
         <title>Assignment 6</title>
-        <style type="text/css">
-            body {
-                color: #ddd;
-                background-color: #333;
-            }
-            header {
-                text-align: center;
-            }
-            main {
-                display: grid;
-                grid-template-columns: 1fr 6fr 1fr;
-            }
-            #left-sidebar {
-                display: flex;
-                flex-direction: column;
-                align-items: flex-end;
-            }
-            #left-list-wrapper {
-                display: flex;
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            #cities-list-title {
-                margin: 0;
-            }
-            #cities-list {
-                margin-left: 0;
-                padding-left: 10px;
-                list-style: none;
-            }
-            .city-list-item {
-                margin: 0;
-            }
-            #canvas-wrapper {
-                display: flex;
-                justify-content: center;
-                align-items: center;
-            }
-            #canvas {
-                padding: 0;
-                background-color: #ddd;
-                outline: 5px solid #000;
-            }
-            #tip-canvas {
-                display: none;
-                padding: 0;
-                background-color: #eee;
-                outline: 1px solid #09c;
-                margin: 0;
-                position: absolute;
-                z-index: 10_000;
-            }
-        </style>
+        <link rel="stylesheet" href="style/style.css" type="text/css">
     </head>
 
     <body>
@@ -78,6 +26,35 @@
                 </div>
             </div>
             <aside id="right-sidebar" class="sidebar">
+                <form>
+                    <p>
+                        <label for="search-type">
+                            <span>Type: </span>
+                        </label>
+                        </br>
+                        <select id="search-type">
+                            <option value="dfs">Depth First</option>
+                            <option value="bfs">Breadth First</option>
+                        </select>
+                    </p>
+                    <p>
+                        <label for="src-in">
+                            <span>From: </span>
+                        </label>
+                        <br>
+                        <input type="text" id="src-in" value="Seattle, WA">
+                    </p>
+                    <p>
+                        <label for="dest-in">
+                            <span>To: </span>
+                        </label>
+                        <br>
+                        <input type="text" id="dest-in" value="Miami, FL">
+                    </p>
+                    <p>
+                        <button type="button" id="search-btn">Search</button>
+                    </p>
+                </form>
             </aside>
         </main>
     </body>

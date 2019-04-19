@@ -2,6 +2,7 @@
 
 const path = require('path');
 const CleanWebpackPlugin = require('clean-webpack-plugin');
+const CopyPlugin = require('copy-webpack-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const webpack = require('webpack');
 // const WasmPackPlugin = require("@wasm-tool/wasm-pack-plugin");
@@ -15,6 +16,9 @@ module.exports = {
     },
     plugins: [
         new CleanWebpackPlugin(),
+        new CopyPlugin([
+            { from: 'style', to:'style' },
+        ]),
         new HtmlWebpackPlugin({
             template: 'index.html',
         })
