@@ -11,6 +11,7 @@ pub struct CanvasState {
     queued: HashSet<String>,
     active: Option<String>,
     searched: HashSet<String>,
+    path: HashSet<String>,
     changed_since_last_draw: RefCell<bool>,
 }
 
@@ -24,6 +25,7 @@ impl CanvasState {
             queued: HashSet::new(),
             active: None,
             searched: HashSet::new(),
+            path: HashSet::new(),
             changed_since_last_draw: RefCell::new(true),
         }
     }
@@ -98,8 +100,28 @@ impl CanvasState {
         }
     }
 
+    pub fn path(&self) -> &HashSet<String> {
+        &self.path
+    }
+
+    pub fn set_path(&mut self, path: HashSet<String>) {
+        if self.path != path {
+            self.path = path;
+            self.changed_since_last_draw.replace(true);
+        }
+    }
+
     pub fn changed_since_last_draw(&self) -> bool {
         *self.changed_since_last_draw.borrow()
+    }
+
+    pub fn reset(&mut self) {
+        self.active = None;
+        self.searched.clear();
+        self.queued.clear();
+        self.path.clear();
+
+        self.changed_since_last_draw.replace(true);
     }
 
     pub fn draw(
@@ -119,13 +141,17 @@ impl CanvasState {
                 && (self.hovered.as_ref().unwrap() == src || self.hovered.as_ref().unwrap() == dest)
             {
                 context.set_stroke_style(&consts::HOVERED_CONN_COLOR.into());
-            } else if self.active.is_some()
-                && (self.active.as_ref().unwrap() == src || self.active.as_ref().unwrap() == dest)
-            {
-                context.set_stroke_style(&consts::SELECTED_CONN_COLOR.into());
-            } else if self.searched.contains(src) || self.searched.contains(dest) {
+            } else if self.path.contains(src) && self.path.contains(dest) {
+                context.set_stroke_style(&consts::PATH_CONN_COLOR.into());
+            } else if self.searched.contains(src) && self.searched.contains(dest) {
                 context.set_stroke_style(&consts::SEARCHED_CONN_COLOR.into());
-            } else if self.queued.contains(src) || self.queued.contains(dest) {
+            } else if self.queued.contains(src)
+                && (self.searched.contains(dest) || self.path.contains(dest))
+            {
+                context.set_stroke_style(&consts::QUEUED_CONN_COLOR.into());
+            } else if self.queued.contains(dest)
+                && (self.searched.contains(src) || self.path.contains(src))
+            {
                 context.set_stroke_style(&consts::QUEUED_CONN_COLOR.into());
             } else {
                 context.set_stroke_style(&consts::CONN_COLOR.into());
@@ -149,6 +175,8 @@ impl CanvasState {
                 color = &consts::HOVERED_CITY_COLOR;
             } else if self.active.is_some() && self.active.as_ref().unwrap() == name {
                 color = &consts::SELECTED_CITY_COLOR;
+            } else if self.path.contains(name) {
+                color = &consts::PATH_CITY_COLOR;
             } else if self.searched.contains(name) {
                 color = &consts::SEARCHED_CITY_COLOR;
             } else if self.queued.contains(name) {

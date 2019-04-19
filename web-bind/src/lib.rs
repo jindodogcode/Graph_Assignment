@@ -8,7 +8,9 @@ use std::rc::Rc;
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
+use web_sys::console;
 
+use graph_lib::graph::dfs;
 use graph_lib::graph::Graph;
 use graph_lib::{gstring_parse, make_graph};
 
@@ -50,6 +52,7 @@ pub fn run() -> Result<(), JsValue> {
         .unwrap();
 
     let graph = make_graph();
+    let graph = Rc::new(graph);
     let (cities, connections) = map_nodes(&graph, canvas_height, canvas_width);
     let canvas_state = Rc::new(RefCell::new(CanvasState::new(cities, connections)));
 
@@ -76,7 +79,7 @@ pub fn run() -> Result<(), JsValue> {
         Rc::clone(&window),
         Rc::clone(&canvas),
         Rc::clone(&context),
-        Rc::new(graph),
+        Rc::clone(&graph),
         Rc::clone(&canvas_state),
     );
     window.add_event_listener_with_callback(
@@ -86,6 +89,27 @@ pub fn run() -> Result<(), JsValue> {
 
     // leaks memory
     window_resize_listener.forget();
+
+    let search_button = document
+        .get_element_by_id("search-btn")
+        .expect("document should contain search-btn element");
+    let search_button = search_button
+        .dyn_into::<web_sys::HtmlButtonElement>()
+        .map_err(|_| ())
+        .unwrap();
+    let search_click_listener = make_search_button_listener(
+        Rc::clone(&window),
+        &document,
+        Rc::clone(&canvas),
+        Rc::clone(&context),
+        Rc::clone(&graph),
+        Rc::clone(&canvas_state),
+    );
+    search_button.add_event_listener_with_callback(
+        "click",
+        search_click_listener.as_ref().unchecked_ref(),
+    )?;
+    search_click_listener.forget();
 
     Ok(())
 }
@@ -157,7 +181,7 @@ fn setup_tooltips(
         .unwrap();
     tip_context.set_font("12px serif");
 
-    // Tooltip handler
+    // Tooltip mouseover listener
     let tooltip_listener = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
         let mouse_x = event.offset_x() as f64;
         let mouse_y = event.offset_y() as f64;
@@ -306,7 +330,7 @@ fn make_cities_list(
     Ok(())
 }
 
-/// Adjust canvas size to window size.
+/// Adjust canvas size based on the window size.
 fn make_window_resize_listener(
     window: Rc<web_sys::Window>,
     canvas: Rc<web_sys::HtmlCanvasElement>,
@@ -331,4 +355,176 @@ fn make_window_resize_listener(
 
         canvas_state.borrow().draw(&canvas, &context);
     }) as Box<dyn FnMut(_)>)
+}
+
+fn make_search_button_listener(
+    window: Rc<web_sys::Window>,
+    document: &web_sys::Document,
+    canvas: Rc<web_sys::HtmlCanvasElement>,
+    context: Rc<web_sys::CanvasRenderingContext2d>,
+    graph: Rc<Graph>,
+    canvas_state: Rc<RefCell<CanvasState>>,
+) -> Closure<(dyn FnMut(web_sys::Event) + 'static)> {
+    let search_type = document
+        .get_element_by_id("search-type")
+        .expect("search-type should exists in the document");
+    let search_type: web_sys::HtmlSelectElement = search_type
+        .dyn_into::<web_sys::HtmlSelectElement>()
+        .map_err(|_| ())
+        .unwrap();
+
+    let src_in = document
+        .get_element_by_id("src-in")
+        .expect("src-in should exists in the document");
+    let src_in: web_sys::HtmlInputElement = src_in
+        .dyn_into::<web_sys::HtmlInputElement>()
+        .map_err(|_| ())
+        .unwrap();
+
+    let dest_in = document
+        .get_element_by_id("dest-in")
+        .expect("dest-in should exists in the document");
+    let dest_in = dest_in
+        .dyn_into::<web_sys::HtmlInputElement>()
+        .map_err(|_| ())
+        .unwrap();
+
+    let performance = window
+        .performance()
+        .expect("performance should be available");
+    let performance = Rc::new(performance);
+
+    Closure::wrap(Box::new(move |_| {
+        let src_in_value = src_in.value();
+        let dest_in_value = dest_in.value();
+        let search_type_value = search_type.value();
+
+        let mut now = 0.0;
+        let mut then = performance.now();
+        let interval = 1000.0;
+        let mut delta = 0.0;
+
+        let search_window = Rc::clone(&window);
+        let performance = Rc::clone(&performance);
+        let canvas = Rc::clone(&canvas);
+        let context = Rc::clone(&context);
+        let graph = Rc::clone(&graph);
+        let canvas_state = Rc::clone(&canvas_state);
+        canvas_state.borrow_mut().reset();
+
+        match search_type_value.as_ref() {
+            "dfs" => {
+                let f = Rc::new(RefCell::new(None));
+                let g = f.clone();
+                let mut end = false;
+                let mut found = false;
+                let mut dfs = (*graph)
+                    .clone()
+                    .rc_step_depth_first_search(&src_in_value, &dest_in_value);
+
+                *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
+                    now = performance.now();
+                    delta = now - then;
+
+                    if end {
+                        let _ = f.borrow_mut().take();
+                        return;
+                    }
+
+                    if found {
+                        canvas_state.borrow_mut().set_active(None);
+                        canvas_state
+                            .borrow_mut()
+                            .set_path(dfs.result().unwrap().into_iter().map(|(s, _)| s).collect());
+
+                        canvas_state.borrow().draw(&canvas, &context);
+
+                        end = true;
+
+                        then = now - (delta % interval);
+                        request_animation_frame(
+                            Rc::clone(&search_window),
+                            f.borrow().as_ref().unwrap(),
+                        );
+                    } else if delta > interval {
+                        let status: dfs::Status = dfs.next();
+
+                        // DELETE ME
+                        console::log_2(&"Status: ".into(), &status.to_string().into());
+
+                        match status {
+                            dfs::Status::Searching => {
+                                // DELETE ME
+                                console::log_2(&"Current: ".into(), &(*dfs.current()).into());
+                                canvas_state
+                                    .borrow_mut()
+                                    .set_active(Some(dfs.current().to_owned()));
+                                canvas_state.borrow_mut().set_queued(
+                                    dfs.stack().iter().map(|(id, _)| id.to_string()).collect(),
+                                );
+                                canvas_state.borrow_mut().set_searched(
+                                    dfs.visited().iter().map(|(id, _)| id.to_string()).collect(),
+                                );
+                                canvas_state.borrow().draw(&canvas, &context);
+
+                                then = now - (delta % interval);
+                                request_animation_frame(
+                                    Rc::clone(&search_window),
+                                    f.borrow().as_ref().unwrap(),
+                                );
+                            }
+                            dfs::Status::Found => {
+                                canvas_state
+                                    .borrow_mut()
+                                    .set_active(Some(dfs.current().to_owned()));
+                                canvas_state.borrow_mut().set_queued(
+                                    dfs.stack().iter().map(|(id, _)| id.to_string()).collect(),
+                                );
+                                canvas_state.borrow_mut().set_searched(
+                                    dfs.visited().iter().map(|(id, _)| id.to_string()).collect(),
+                                );
+                                canvas_state.borrow().draw(&canvas, &context);
+
+                                found = true;
+
+                                then = now - (delta % interval);
+                                request_animation_frame(
+                                    Rc::clone(&search_window),
+                                    f.borrow().as_ref().unwrap(),
+                                );
+                            }
+
+                            dfs::Status::NotFound => {
+                                end = true;
+
+                                then = now - (delta % interval);
+                                request_animation_frame(
+                                    Rc::clone(&search_window),
+                                    f.borrow().as_ref().unwrap(),
+                                );
+                            }
+                        }
+                    } else {
+                        then = now - (delta % interval);
+                        request_animation_frame(
+                            Rc::clone(&search_window),
+                            f.borrow().as_ref().unwrap(),
+                        );
+                    }
+                }) as Box<FnMut()>));
+
+                request_animation_frame(Rc::clone(&window), g.borrow().as_ref().unwrap());
+            }
+            "bfs" => {}
+            "dijk" => {}
+            "a*" => {}
+            _ => {}
+        }
+    }) as Box<dyn FnMut(_)>)
+}
+
+fn request_animation_frame(window: Rc<web_sys::Window>, f: &Closure<FnMut()>) {
+    window
+        .request_animation_frame(f.as_ref().unchecked_ref())
+        .expect("should register 'requestAnimationFrame' OK");
 }
