@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::graph::point::Point;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Node {
     id: String,
     point: Point,

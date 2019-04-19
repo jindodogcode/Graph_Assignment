@@ -5,11 +5,12 @@ pub mod point;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
+use std::rc::Rc;
 
 use node::Node;
 use point::Point;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Graph {
     nodes: HashMap<String, Node>,
 }
@@ -97,12 +98,16 @@ impl Graph {
         Ok(search.result())
     }
 
-    pub fn step_depth_first_search<'a>(
-        &'a self,
-        start: &'a str,
-        end: &'a str,
-    ) -> dfs::DepthFirstSearch<'a> {
+    pub fn step_depth_first_search<'b>(
+        &'b self,
+        start: &'b str,
+        end: &'b str,
+    ) -> dfs::DepthFirstSearch<'b> {
         dfs::DepthFirstSearch::new(&self, start, end)
+    }
+
+    pub fn rc_step_depth_first_search(self, start: &str, end: &str) -> dfs::RcDepthFirstSearch {
+        dfs::RcDepthFirstSearch::new(Rc::new(self), start, end)
     }
 }
 
@@ -126,11 +131,3 @@ impl fmt::Display for DoesNotContainError {
 }
 
 impl Error for DoesNotContainError {}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn dfs() {}
-}
