@@ -65,3 +65,8 @@ form {
     width: 90%;
     padding: 1em;
 }
+
+#search-error-text {
+    display: none;
+    color: #f33;
+}
