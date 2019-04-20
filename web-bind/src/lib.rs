@@ -10,6 +10,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::console;
 
+use graph_lib::graph::bfs;
 use graph_lib::graph::dfs;
 use graph_lib::graph::Graph;
 use graph_lib::{gstring_parse, make_graph};
@@ -26,6 +27,7 @@ pub fn run() -> Result<(), JsValue> {
     let window = web_sys::window().unwrap();
     let window = Rc::new(window);
     let document = window.document().unwrap();
+    let document = Rc::new(document);
     let canvas = document.get_element_by_id("canvas").unwrap();
     let canvas: web_sys::HtmlCanvasElement = canvas
         .dyn_into::<web_sys::HtmlCanvasElement>()
@@ -99,7 +101,7 @@ pub fn run() -> Result<(), JsValue> {
         .unwrap();
     let search_click_listener = make_search_button_listener(
         Rc::clone(&window),
-        &document,
+        Rc::clone(&document),
         Rc::clone(&canvas),
         Rc::clone(&context),
         Rc::clone(&graph),
@@ -110,6 +112,24 @@ pub fn run() -> Result<(), JsValue> {
         search_click_listener.as_ref().unchecked_ref(),
     )?;
     search_click_listener.forget();
+
+    let reset_button = document
+        .get_element_by_id("reset-btn")
+        .expect("document should contain reset-btn element");
+    let reset_button = reset_button
+        .dyn_into::<web_sys::HtmlButtonElement>()
+        .map_err(|_| ())
+        .unwrap();
+    let reset_button_click_listener = make_reset_button_listener(
+        Rc::clone(&canvas),
+        Rc::clone(&context),
+        Rc::clone(&canvas_state),
+    );
+    reset_button.add_event_listener_with_callback(
+        "click",
+        reset_button_click_listener.as_ref().unchecked_ref(),
+    )?;
+    reset_button_click_listener.forget();
 
     Ok(())
 }
@@ -359,7 +379,7 @@ fn make_window_resize_listener(
 
 fn make_search_button_listener(
     window: Rc<web_sys::Window>,
-    document: &web_sys::Document,
+    document: Rc<web_sys::Document>,
     canvas: Rc<web_sys::HtmlCanvasElement>,
     context: Rc<web_sys::CanvasRenderingContext2d>,
     graph: Rc<Graph>,
@@ -394,10 +414,30 @@ fn make_search_button_listener(
         .expect("performance should be available");
     let performance = Rc::new(performance);
 
+    let document = Rc::clone(&document);
+
     Closure::wrap(Box::new(move |_| {
         let src_in_value = src_in.value();
         let dest_in_value = dest_in.value();
         let search_type_value = search_type.value();
+        let error_text = document
+            .get_element_by_id("search-error-text")
+            .expect("document should contain search-error-text element");
+        let error_text = error_text
+            .dyn_into::<web_sys::HtmlElement>()
+            .map_err(|_| ())
+            .unwrap();
+
+        if !graph.nodes().contains_key(&src_in_value) || !graph.nodes().contains_key(&dest_in_value)
+        {
+            error_text
+                .style()
+                .set_property("display", "inline")
+                .unwrap();
+            return;
+        } else {
+            error_text.style().set_property("display", "none").unwrap();
+        }
 
         let mut now = 0.0;
         let mut then = performance.now();
@@ -412,12 +452,13 @@ fn make_search_button_listener(
         let canvas_state = Rc::clone(&canvas_state);
         canvas_state.borrow_mut().reset();
 
+        let f = Rc::new(RefCell::new(None));
+        let g = f.clone();
+        let mut end = false;
+        let mut found = false;
+
         match search_type_value.as_ref() {
             "dfs" => {
-                let f = Rc::new(RefCell::new(None));
-                let g = f.clone();
-                let mut end = false;
-                let mut found = false;
                 let mut dfs = (*graph)
                     .clone()
                     .rc_step_depth_first_search(&src_in_value, &dest_in_value);
@@ -515,7 +556,104 @@ fn make_search_button_listener(
 
                 request_animation_frame(Rc::clone(&window), g.borrow().as_ref().unwrap());
             }
-            "bfs" => {}
+            "bfs" => {
+                let mut bfs = (*graph)
+                    .clone()
+                    .rc_step_breadth_first_search(&src_in_value, &dest_in_value);
+
+                *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
+                    now = performance.now();
+                    delta = now - then;
+
+                    if end {
+                        let _ = f.borrow_mut().take();
+                        return;
+                    }
+
+                    if found {
+                        canvas_state.borrow_mut().set_active(None);
+                        canvas_state
+                            .borrow_mut()
+                            .set_path(bfs.result().unwrap().into_iter().map(|(s, _)| s).collect());
+
+                        canvas_state.borrow().draw(&canvas, &context);
+
+                        end = true;
+
+                        then = now - (delta % interval);
+                        request_animation_frame(
+                            Rc::clone(&search_window),
+                            f.borrow().as_ref().unwrap(),
+                        );
+                    } else if delta > interval {
+                        let status: bfs::Status = bfs.next();
+
+                        // DELETE ME
+                        console::log_2(&"Status: ".into(), &status.to_string().into());
+
+                        match status {
+                            bfs::Status::Searching => {
+                                // DELETE ME
+                                console::log_2(&"Current: ".into(), &(*bfs.current()).into());
+                                canvas_state
+                                    .borrow_mut()
+                                    .set_active(Some(bfs.current().to_owned()));
+                                canvas_state.borrow_mut().set_queued(
+                                    bfs.queue().iter().map(|(id, _)| id.to_string()).collect(),
+                                );
+                                canvas_state.borrow_mut().set_searched(
+                                    bfs.visited().iter().map(|(id, _)| id.to_string()).collect(),
+                                );
+                                canvas_state.borrow().draw(&canvas, &context);
+
+                                then = now - (delta % interval);
+                                request_animation_frame(
+                                    Rc::clone(&search_window),
+                                    f.borrow().as_ref().unwrap(),
+                                );
+                            }
+                            bfs::Status::Found => {
+                                canvas_state
+                                    .borrow_mut()
+                                    .set_active(Some(bfs.current().to_owned()));
+                                canvas_state.borrow_mut().set_queued(
+                                    bfs.queue().iter().map(|(id, _)| id.to_string()).collect(),
+                                );
+                                canvas_state.borrow_mut().set_searched(
+                                    bfs.visited().iter().map(|(id, _)| id.to_string()).collect(),
+                                );
+                                canvas_state.borrow().draw(&canvas, &context);
+
+                                found = true;
+
+                                then = now - (delta % interval);
+                                request_animation_frame(
+                                    Rc::clone(&search_window),
+                                    f.borrow().as_ref().unwrap(),
+                                );
+                            }
+
+                            bfs::Status::NotFound => {
+                                end = true;
+
+                                then = now - (delta % interval);
+                                request_animation_frame(
+                                    Rc::clone(&search_window),
+                                    f.borrow().as_ref().unwrap(),
+                                );
+                            }
+                        }
+                    } else {
+                        then = now - (delta % interval);
+                        request_animation_frame(
+                            Rc::clone(&search_window),
+                            f.borrow().as_ref().unwrap(),
+                        );
+                    }
+                }) as Box<FnMut()>));
+
+                request_animation_frame(Rc::clone(&window), g.borrow().as_ref().unwrap());
+            }
             "dijk" => {}
             "a*" => {}
             _ => {}
@@ -527,4 +665,15 @@ fn request_animation_frame(window: Rc<web_sys::Window>, f: &Closure<FnMut()>) {
     window
         .request_animation_frame(f.as_ref().unchecked_ref())
         .expect("should register 'requestAnimationFrame' OK");
+}
+
+fn make_reset_button_listener(
+    canvas: Rc<web_sys::HtmlCanvasElement>,
+    context: Rc<web_sys::CanvasRenderingContext2d>,
+    canvas_state: Rc<RefCell<CanvasState>>,
+) -> Closure<(dyn FnMut(web_sys::Event) + 'static)> {
+    Closure::wrap(Box::new(move |_| {
+        canvas_state.borrow_mut().reset();
+        canvas_state.borrow().draw(&canvas, &context);
+    }) as Box<dyn FnMut(_)>)
 }
