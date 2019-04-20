@@ -1,3 +1,4 @@
+pub mod bfs;
 pub mod dfs;
 pub mod node;
 pub mod point;
@@ -108,6 +109,34 @@ impl Graph {
 
     pub fn rc_step_depth_first_search(self, start: &str, end: &str) -> dfs::RcDepthFirstSearch {
         dfs::RcDepthFirstSearch::new(Rc::new(self), start, end)
+    }
+
+    pub fn breadth_first_search(
+        &self,
+        start: &str,
+        end: &str,
+    ) -> Result<Option<Vec<(String, f64)>>, DoesNotContainError> {
+        if !self.nodes.contains_key(start) || !self.nodes.contains_key(end) {
+            return Err(DoesNotContainError);
+        }
+
+        let mut search = bfs::BreadthFirstSearch::new(&self, start, end);
+
+        while let bfs::Status::Searching = search.next() {}
+
+        Ok(search.result())
+    }
+
+    pub fn step_breadth_first_search<'b>(
+        &'b self,
+        start: &'b str,
+        end: &'b str,
+    ) -> bfs::BreadthFirstSearch<'b> {
+        bfs::BreadthFirstSearch::new(&self, start, end)
+    }
+
+    pub fn rc_step_breadth_first_search(self, start: &str, end: &str) -> bfs::RcBreadthFirstSearch {
+        bfs::RcBreadthFirstSearch::new(Rc::new(self), start, end)
     }
 }
 
