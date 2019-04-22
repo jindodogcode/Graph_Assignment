@@ -1,7 +1,6 @@
-pub mod bfs;
-pub mod dfs;
 pub mod node;
 pub mod point;
+pub mod search;
 
 use std::collections::HashMap;
 use std::error::Error;
@@ -10,6 +9,7 @@ use std::rc::Rc;
 
 use node::Node;
 use point::Point;
+use search::{bfs, dfs, Status};
 
 #[derive(Debug, Clone)]
 pub struct Graph {
@@ -94,7 +94,7 @@ impl Graph {
 
         let mut search = dfs::DepthFirstSearch::new(&self, start, end);
 
-        while let dfs::Status::Searching = search.next() {}
+        while let Status::Searching = search.next() {}
 
         Ok(search.result())
     }
@@ -122,7 +122,7 @@ impl Graph {
 
         let mut search = bfs::BreadthFirstSearch::new(&self, start, end);
 
-        while let bfs::Status::Searching = search.next() {}
+        while let Status::Searching = search.next() {}
 
         Ok(search.result())
     }

@@ -38,10 +38,34 @@ main {
     margin: 0;
 }
 
+#color-key-list {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+}
+
+#color-key-wrapper {
+    margin: 0 auto;
+    width: 90%;
+}
+
+.color-key-item {
+    display: inline;
+}
+
+.color-block {
+    float: right;
+    width: 15px;
+    height: 15px;
+    margin-left: 1em;
+    border: 1px solid #000;
+}
+
 #canvas-wrapper {
     display: flex;
     justify-content: center;
     align-items: center;
+    margin: 5px 0;
 }
 
 #canvas {

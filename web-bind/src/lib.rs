@@ -10,8 +10,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::console;
 
-use graph_lib::graph::bfs;
-use graph_lib::graph::dfs;
+use graph_lib::graph::search::{Search, Status};
 use graph_lib::graph::Graph;
 use graph_lib::{gstring_parse, make_graph};
 
@@ -28,7 +27,9 @@ pub fn run() -> Result<(), JsValue> {
     let window = Rc::new(window);
     let document = window.document().unwrap();
     let document = Rc::new(document);
-    let canvas = document.get_element_by_id("canvas").unwrap();
+    let canvas = document
+        .get_element_by_id("canvas")
+        .expect("document should contain canvas element");
     let canvas: web_sys::HtmlCanvasElement = canvas
         .dyn_into::<web_sys::HtmlCanvasElement>()
         .map_err(|_| ())
@@ -57,6 +58,9 @@ pub fn run() -> Result<(), JsValue> {
     let graph = Rc::new(graph);
     let (cities, connections) = map_nodes(&graph, canvas_height, canvas_width);
     let canvas_state = Rc::new(RefCell::new(CanvasState::new(cities, connections)));
+
+    // Make color key
+    make_color_key(&document)?;
 
     // Draw initial canvas
     canvas_state.borrow().draw(&canvas, &context);
@@ -129,6 +133,8 @@ pub fn run() -> Result<(), JsValue> {
         "click",
         reset_button_click_listener.as_ref().unchecked_ref(),
     )?;
+
+    // leaks memory
     reset_button_click_listener.forget();
 
     Ok(())
@@ -350,6 +356,109 @@ fn make_cities_list(
     Ok(())
 }
 
+fn make_color_key(document: &web_sys::Document) -> Result<(), JsValue> {
+    let color_key_items = document
+        .get_element_by_id("color-key-list")
+        .expect("document should contain color-key-items element");
+
+    let undiscovered = document.create_element("div")?;
+    let undiscovered = undiscovered
+        .dyn_into::<web_sys::HtmlElement>()
+        .map_err(|_| ())
+        .unwrap();
+    undiscovered.set_attribute("class", "color-key-item")?;
+    let undiscovered_color = document.create_element("div")?;
+    let undiscovered_color = undiscovered_color
+        .dyn_into::<web_sys::HtmlElement>()
+        .map_err(|_| ())
+        .unwrap();
+    undiscovered_color.set_attribute("class", "color-block")?;
+    undiscovered_color
+        .style()
+        .set_property("background", consts::CONN_COLOR)?;
+    undiscovered.set_inner_html("Undiscovered: ");
+    undiscovered.append_child(&undiscovered_color)?;
+    color_key_items.append_child(&undiscovered)?;
+
+    let discovered = document.create_element("div")?;
+    let discovered = discovered
+        .dyn_into::<web_sys::HtmlElement>()
+        .map_err(|_| ())
+        .unwrap();
+    discovered.set_attribute("class", "color-key-item")?;
+    let discovered_color = document.create_element("div")?;
+    let discovered_color = discovered_color
+        .dyn_into::<web_sys::HtmlElement>()
+        .map_err(|_| ())
+        .unwrap();
+    discovered_color.set_attribute("class", "color-block")?;
+    discovered_color
+        .style()
+        .set_property("background", consts::QUEUED_CONN_COLOR)?;
+    discovered.set_inner_html("Discovered: ");
+    discovered.append_child(&discovered_color)?;
+    color_key_items.append_child(&discovered)?;
+
+    let searched = document.create_element("div")?;
+    let searched = searched
+        .dyn_into::<web_sys::HtmlElement>()
+        .map_err(|_| ())
+        .unwrap();
+    searched.set_attribute("class", "color-key-item")?;
+    let searched_color = document.create_element("div")?;
+    let searched_color = searched_color
+        .dyn_into::<web_sys::HtmlElement>()
+        .map_err(|_| ())
+        .unwrap();
+    searched_color.set_attribute("class", "color-block")?;
+    searched_color
+        .style()
+        .set_property("background", consts::SEARCHED_CONN_COLOR)?;
+    searched.set_inner_html("Searched: ");
+    searched.append_child(&searched_color)?;
+    color_key_items.append_child(&searched)?;
+
+    let path = document.create_element("div")?;
+    let path = path
+        .dyn_into::<web_sys::HtmlElement>()
+        .map_err(|_| ())
+        .unwrap();
+    path.set_attribute("class", "color-key-item")?;
+    let path_color = document.create_element("div")?;
+    let path_color = path_color
+        .dyn_into::<web_sys::HtmlElement>()
+        .map_err(|_| ())
+        .unwrap();
+    path_color.set_attribute("class", "color-block")?;
+    path_color
+        .style()
+        .set_property("background", consts::PATH_CONN_COLOR)?;
+    path.set_inner_html("Path: ");
+    path.append_child(&path_color)?;
+    color_key_items.append_child(&path)?;
+
+    let current = document.create_element("div")?;
+    let current = current
+        .dyn_into::<web_sys::HtmlElement>()
+        .map_err(|_| ())
+        .unwrap();
+    current.set_attribute("class", "color_key_items")?;
+    let current_color = document.create_element("div")?;
+    let current_color = current_color
+        .dyn_into::<web_sys::HtmlElement>()
+        .map_err(|_| ())
+        .unwrap();
+    current_color.set_attribute("class", "color-block")?;
+    current_color
+        .style()
+        .set_property("background", consts::SELECTED_CITY_COLOR)?;
+    current.set_inner_html("Current: ");
+    current.append_child(&current_color)?;
+    color_key_items.append_child(&current)?;
+
+    Ok(())
+}
+
 /// Adjust canvas size based on the window size.
 fn make_window_resize_listener(
     window: Rc<web_sys::Window>,
@@ -439,6 +548,36 @@ fn make_search_button_listener(
             error_text.style().set_property("display", "none").unwrap();
         }
 
+        let search: Box<RefCell<Search>>;
+
+        match search_type_value.as_ref() {
+            "dfs" => {
+                search = Box::new(RefCell::new(
+                    (*graph)
+                        .clone()
+                        .rc_step_depth_first_search(&src_in_value, &dest_in_value),
+                ));
+            }
+            "bfs" => {
+                search = Box::new(RefCell::new(
+                    (*graph)
+                        .clone()
+                        .rc_step_breadth_first_search(&src_in_value, &dest_in_value),
+                ));
+            }
+            // all cases must be matched
+            _ => {
+                // search has to be initialized
+                // TODO: come up with a better sulution for this
+                search = Box::new(RefCell::new(
+                    (*graph)
+                        .clone()
+                        .rc_step_depth_first_search(&src_in_value, &dest_in_value),
+                ));
+            }
+        }
+
+        // Variables to move to search closure
         let mut now = 0.0;
         let mut then = performance.now();
         let interval = 1000.0;
@@ -448,7 +587,6 @@ fn make_search_button_listener(
         let performance = Rc::clone(&performance);
         let canvas = Rc::clone(&canvas);
         let context = Rc::clone(&context);
-        let graph = Rc::clone(&graph);
         let canvas_state = Rc::clone(&canvas_state);
         canvas_state.borrow_mut().reset();
 
@@ -457,29 +595,103 @@ fn make_search_button_listener(
         let mut end = false;
         let mut found = false;
 
-        match search_type_value.as_ref() {
-            "dfs" => {
-                let mut dfs = (*graph)
-                    .clone()
-                    .rc_step_depth_first_search(&src_in_value, &dest_in_value);
+        // Search closure
+        *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
+            now = performance.now();
+            delta = now - then;
 
-                *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-                    now = performance.now();
-                    delta = now - then;
+            if end {
+                let _ = f.borrow_mut().take();
+                return;
+            }
 
-                    if end {
-                        let _ = f.borrow_mut().take();
-                        return;
-                    }
+            if found {
+                canvas_state.borrow_mut().set_active(None);
+                canvas_state.borrow_mut().set_path(
+                    search
+                        .borrow()
+                        .result()
+                        .unwrap()
+                        .into_iter()
+                        .map(|(s, _)| s)
+                        .collect(),
+                );
 
-                    if found {
-                        canvas_state.borrow_mut().set_active(None);
+                canvas_state.borrow().draw(&canvas, &context);
+
+                end = true;
+
+                then = now - (delta % interval);
+                request_animation_frame(Rc::clone(&search_window), f.borrow().as_ref().unwrap());
+            } else if delta > interval {
+                let status: Status = search.borrow_mut().next();
+
+                // TODO: DELETE ME
+                console::log_2(&"Status: ".into(), &status.to_string().into());
+
+                match status {
+                    Status::Searching => {
+                        // TODO: DELETE ME
+                        console::log_2(&"Current: ".into(), &(*search.borrow().current()).into());
                         canvas_state
                             .borrow_mut()
-                            .set_path(dfs.result().unwrap().into_iter().map(|(s, _)| s).collect());
-
+                            .set_active(Some(search.borrow().current().to_owned()));
+                        canvas_state.borrow_mut().set_queued(
+                            search
+                                .borrow()
+                                .visible()
+                                .iter()
+                                .map(|(id, _)| id.to_string())
+                                .collect(),
+                        );
+                        canvas_state.borrow_mut().set_searched(
+                            search
+                                .borrow()
+                                .visited()
+                                .iter()
+                                .map(|(id, _)| id.to_string())
+                                .collect(),
+                        );
                         canvas_state.borrow().draw(&canvas, &context);
 
+                        then = now - (delta % interval);
+                        request_animation_frame(
+                            Rc::clone(&search_window),
+                            f.borrow().as_ref().unwrap(),
+                        );
+                    }
+                    Status::Found => {
+                        canvas_state
+                            .borrow_mut()
+                            .set_active(Some(search.borrow().current().to_owned()));
+                        canvas_state.borrow_mut().set_queued(
+                            search
+                                .borrow()
+                                .visible()
+                                .iter()
+                                .map(|(id, _)| id.to_string())
+                                .collect(),
+                        );
+                        canvas_state.borrow_mut().set_searched(
+                            search
+                                .borrow()
+                                .visited()
+                                .iter()
+                                .map(|(id, _)| id.to_string())
+                                .collect(),
+                        );
+                        canvas_state.borrow().draw(&canvas, &context);
+
+                        found = true;
+
+                        then = now - (delta % interval);
+                        request_animation_frame(
+                            Rc::clone(&search_window),
+                            f.borrow().as_ref().unwrap(),
+                        );
+                    }
+
+                    Status::NotFound => {
                         end = true;
 
                         then = now - (delta % interval);
@@ -487,177 +699,15 @@ fn make_search_button_listener(
                             Rc::clone(&search_window),
                             f.borrow().as_ref().unwrap(),
                         );
-                    } else if delta > interval {
-                        let status: dfs::Status = dfs.next();
-
-                        // DELETE ME
-                        console::log_2(&"Status: ".into(), &status.to_string().into());
-
-                        match status {
-                            dfs::Status::Searching => {
-                                // DELETE ME
-                                console::log_2(&"Current: ".into(), &(*dfs.current()).into());
-                                canvas_state
-                                    .borrow_mut()
-                                    .set_active(Some(dfs.current().to_owned()));
-                                canvas_state.borrow_mut().set_queued(
-                                    dfs.stack().iter().map(|(id, _)| id.to_string()).collect(),
-                                );
-                                canvas_state.borrow_mut().set_searched(
-                                    dfs.visited().iter().map(|(id, _)| id.to_string()).collect(),
-                                );
-                                canvas_state.borrow().draw(&canvas, &context);
-
-                                then = now - (delta % interval);
-                                request_animation_frame(
-                                    Rc::clone(&search_window),
-                                    f.borrow().as_ref().unwrap(),
-                                );
-                            }
-                            dfs::Status::Found => {
-                                canvas_state
-                                    .borrow_mut()
-                                    .set_active(Some(dfs.current().to_owned()));
-                                canvas_state.borrow_mut().set_queued(
-                                    dfs.stack().iter().map(|(id, _)| id.to_string()).collect(),
-                                );
-                                canvas_state.borrow_mut().set_searched(
-                                    dfs.visited().iter().map(|(id, _)| id.to_string()).collect(),
-                                );
-                                canvas_state.borrow().draw(&canvas, &context);
-
-                                found = true;
-
-                                then = now - (delta % interval);
-                                request_animation_frame(
-                                    Rc::clone(&search_window),
-                                    f.borrow().as_ref().unwrap(),
-                                );
-                            }
-
-                            dfs::Status::NotFound => {
-                                end = true;
-
-                                then = now - (delta % interval);
-                                request_animation_frame(
-                                    Rc::clone(&search_window),
-                                    f.borrow().as_ref().unwrap(),
-                                );
-                            }
-                        }
-                    } else {
-                        then = now - (delta % interval);
-                        request_animation_frame(
-                            Rc::clone(&search_window),
-                            f.borrow().as_ref().unwrap(),
-                        );
                     }
-                }) as Box<FnMut()>));
-
-                request_animation_frame(Rc::clone(&window), g.borrow().as_ref().unwrap());
+                }
+            } else {
+                then = now - (delta % interval);
+                request_animation_frame(Rc::clone(&search_window), f.borrow().as_ref().unwrap());
             }
-            "bfs" => {
-                let mut bfs = (*graph)
-                    .clone()
-                    .rc_step_breadth_first_search(&src_in_value, &dest_in_value);
+        }) as Box<FnMut()>));
 
-                *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-                    now = performance.now();
-                    delta = now - then;
-
-                    if end {
-                        let _ = f.borrow_mut().take();
-                        return;
-                    }
-
-                    if found {
-                        canvas_state.borrow_mut().set_active(None);
-                        canvas_state
-                            .borrow_mut()
-                            .set_path(bfs.result().unwrap().into_iter().map(|(s, _)| s).collect());
-
-                        canvas_state.borrow().draw(&canvas, &context);
-
-                        end = true;
-
-                        then = now - (delta % interval);
-                        request_animation_frame(
-                            Rc::clone(&search_window),
-                            f.borrow().as_ref().unwrap(),
-                        );
-                    } else if delta > interval {
-                        let status: bfs::Status = bfs.next();
-
-                        // DELETE ME
-                        console::log_2(&"Status: ".into(), &status.to_string().into());
-
-                        match status {
-                            bfs::Status::Searching => {
-                                // DELETE ME
-                                console::log_2(&"Current: ".into(), &(*bfs.current()).into());
-                                canvas_state
-                                    .borrow_mut()
-                                    .set_active(Some(bfs.current().to_owned()));
-                                canvas_state.borrow_mut().set_queued(
-                                    bfs.queue().iter().map(|(id, _)| id.to_string()).collect(),
-                                );
-                                canvas_state.borrow_mut().set_searched(
-                                    bfs.visited().iter().map(|(id, _)| id.to_string()).collect(),
-                                );
-                                canvas_state.borrow().draw(&canvas, &context);
-
-                                then = now - (delta % interval);
-                                request_animation_frame(
-                                    Rc::clone(&search_window),
-                                    f.borrow().as_ref().unwrap(),
-                                );
-                            }
-                            bfs::Status::Found => {
-                                canvas_state
-                                    .borrow_mut()
-                                    .set_active(Some(bfs.current().to_owned()));
-                                canvas_state.borrow_mut().set_queued(
-                                    bfs.queue().iter().map(|(id, _)| id.to_string()).collect(),
-                                );
-                                canvas_state.borrow_mut().set_searched(
-                                    bfs.visited().iter().map(|(id, _)| id.to_string()).collect(),
-                                );
-                                canvas_state.borrow().draw(&canvas, &context);
-
-                                found = true;
-
-                                then = now - (delta % interval);
-                                request_animation_frame(
-                                    Rc::clone(&search_window),
-                                    f.borrow().as_ref().unwrap(),
-                                );
-                            }
-
-                            bfs::Status::NotFound => {
-                                end = true;
-
-                                then = now - (delta % interval);
-                                request_animation_frame(
-                                    Rc::clone(&search_window),
-                                    f.borrow().as_ref().unwrap(),
-                                );
-                            }
-                        }
-                    } else {
-                        then = now - (delta % interval);
-                        request_animation_frame(
-                            Rc::clone(&search_window),
-                            f.borrow().as_ref().unwrap(),
-                        );
-                    }
-                }) as Box<FnMut()>));
-
-                request_animation_frame(Rc::clone(&window), g.borrow().as_ref().unwrap());
-            }
-            "dijk" => {}
-            "a*" => {}
-            _ => {}
-        }
+        request_animation_frame(Rc::clone(&window), g.borrow().as_ref().unwrap());
     }) as Box<dyn FnMut(_)>)
 }
 

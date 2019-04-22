@@ -1,62 +1,37 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::collections::VecDeque;
-use std::fmt::{self, Display, Formatter};
 use std::rc::Rc;
 
+use crate::graph::search::{Search, State, Status};
 use crate::graph::Graph;
 
-#[derive(Debug, Copy, Clone)]
-pub enum Status {
-    Found,
-    NotFound,
-    Searching,
-}
-
-impl Display for Status {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            Status::Found => write!(f, "Found"),
-            Status::NotFound => write!(f, "Not Found"),
-            Status::Searching => write!(f, "Searching"),
-        }
-    }
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum State {
-    Pop,
-    Push,
-    Done(Status),
-}
-
 #[derive(Debug)]
-pub struct BreadthFirstSearch<'a> {
+pub struct DepthFirstSearch<'a> {
     graph: &'a Graph,
     current: &'a str,
     dest: &'a str,
     discovered: HashSet<&'a str>,
-    queue: VecDeque<(&'a str, (&'a str, f64))>,
+    stack: Vec<(&'a str, (&'a str, f64))>,
     visited: HashMap<&'a str, (&'a str, f64)>,
     state: State,
 }
 
 // Associate functions
-impl<'a> BreadthFirstSearch<'a> {
-    pub fn new(graph: &'a Graph, start: &str, dest: &str) -> BreadthFirstSearch<'a> {
+impl<'a> DepthFirstSearch<'a> {
+    pub fn new(graph: &'a Graph, start: &str, dest: &str) -> DepthFirstSearch<'a> {
         let start = graph.nodes()[start].id();
         let dest = graph.nodes()[dest].id();
         let mut discovered = HashSet::new();
         discovered.insert(start);
-        let mut queue = VecDeque::new();
-        queue.push_back((start, ("", 0.0)));
+        let mut stack = Vec::new();
+        stack.push((start, ("", 0.0)));
 
-        BreadthFirstSearch {
+        DepthFirstSearch {
             graph,
             current: "",
             dest: dest,
             discovered,
-            queue,
+            stack,
             visited: HashMap::new(),
             state: State::Pop,
         }
@@ -64,13 +39,13 @@ impl<'a> BreadthFirstSearch<'a> {
 }
 
 // Public methods
-impl<'a> BreadthFirstSearch<'a> {
+impl<'a> DepthFirstSearch<'a> {
     pub fn current(&self) -> &str {
         self.current
     }
 
-    pub fn queue(&self) -> &VecDeque<(&str, (&str, f64))> {
-        &self.queue
+    pub fn stack(&self) -> &Vec<(&str, (&str, f64))> {
+        &self.stack
     }
 
     pub fn visited(&self) -> &HashMap<&str, (&str, f64)> {
@@ -84,7 +59,7 @@ impl<'a> BreadthFirstSearch<'a> {
     pub fn next(&mut self) -> Status {
         match self.state {
             State::Pop => {
-                let (id, (from, dist)) = if let Some(path) = self.queue.pop_front() {
+                let (id, (from, dist)) = if let Some(path) = self.stack.pop() {
                     path
                 } else {
                     let status = Status::NotFound;
@@ -111,7 +86,7 @@ impl<'a> BreadthFirstSearch<'a> {
                         continue;
                     }
                     self.discovered.insert(id.as_ref());
-                    self.queue.push_back((id, (self.current, *dist)));
+                    self.stack.push((id, (self.current, *dist)));
                 }
 
                 self.state = State::Pop;
@@ -132,7 +107,7 @@ impl<'a> BreadthFirstSearch<'a> {
 }
 
 // Private methods
-impl<'a> BreadthFirstSearch<'a> {
+impl<'a> DepthFirstSearch<'a> {
     fn make_path(&self) -> Vec<(String, f64)> {
         let mut path: Vec<(String, f64)> = Vec::new();
 
@@ -153,33 +128,33 @@ impl<'a> BreadthFirstSearch<'a> {
 }
 
 #[derive(Debug)]
-pub struct RcBreadthFirstSearch {
+pub struct RcDepthFirstSearch {
     graph: Rc<Graph>,
     current: Rc<String>,
     dest: Rc<String>,
     discovered: HashSet<Rc<String>>,
-    queue: VecDeque<(Rc<String>, (Rc<String>, f64))>,
+    stack: Vec<(Rc<String>, (Rc<String>, f64))>,
     visited: HashMap<Rc<String>, (Rc<String>, f64)>,
     state: State,
 }
 
 // Associate functions
-impl RcBreadthFirstSearch {
-    pub fn new(graph: Rc<Graph>, start: &str, dest: &str) -> RcBreadthFirstSearch {
+impl RcDepthFirstSearch {
+    pub fn new(graph: Rc<Graph>, start: &str, dest: &str) -> RcDepthFirstSearch {
         let start = Rc::new(graph.nodes()[start].id().to_owned());
         let dest = Rc::new(graph.nodes()[dest].id().to_owned());
         let empty = Rc::new("".to_owned());
         let mut discovered = HashSet::new();
         discovered.insert(Rc::clone(&start));
-        let mut queue = VecDeque::new();
-        queue.push_back((start, (Rc::clone(&empty), 0.0)));
+        let mut stack = Vec::new();
+        stack.push((start, (Rc::clone(&empty), 0.0)));
 
-        RcBreadthFirstSearch {
+        RcDepthFirstSearch {
             graph,
             current: Rc::clone(&empty),
             dest,
             discovered,
-            queue,
+            stack,
             visited: HashMap::new(),
             state: State::Pop,
         }
@@ -187,27 +162,33 @@ impl RcBreadthFirstSearch {
 }
 
 // Public methods
-impl RcBreadthFirstSearch {
-    pub fn current(&self) -> &str {
+impl Search for RcDepthFirstSearch {
+    fn current(&self) -> &str {
         &self.current
     }
 
-    pub fn queue(&self) -> &VecDeque<(Rc<String>, (Rc<String>, f64))> {
-        &self.queue
+    fn visible(&self) -> Vec<(Rc<String>, (Rc<String>, f64))> {
+        self.stack
+            .iter()
+            .map(|(s1, (s2, f))| (Rc::clone(s1), (Rc::clone(s2), *f)))
+            .collect()
     }
 
-    pub fn visited(&self) -> &HashMap<Rc<String>, (Rc<String>, f64)> {
-        &self.visited
+    fn visited(&self) -> Vec<(Rc<String>, (Rc<String>, f64))> {
+        self.visited
+            .iter()
+            .map(|(s1, (s2, f))| (Rc::clone(s1), (Rc::clone(s2), *f)))
+            .collect()
     }
 
-    pub fn state(&self) -> State {
+    fn state(&self) -> State {
         self.state
     }
 
-    pub fn next(&mut self) -> Status {
+    fn next(&mut self) -> Status {
         match self.state {
             State::Pop => {
-                let (id, (from, dist)) = if let Some(path) = self.queue.pop_front() {
+                let (id, (from, dist)) = if let Some(path) = self.stack.pop() {
                     path
                 } else {
                     let status = Status::NotFound;
@@ -235,8 +216,8 @@ impl RcBreadthFirstSearch {
                     }
                     let id = Rc::new(id.clone());
                     self.discovered.insert(Rc::clone(&id));
-                    self.queue
-                        .push_back((Rc::clone(&id), (Rc::clone(&self.current), *dist)));
+                    self.stack
+                        .push((Rc::clone(&id), (Rc::clone(&self.current), *dist)));
                 }
 
                 self.state = State::Pop;
@@ -248,7 +229,7 @@ impl RcBreadthFirstSearch {
         }
     }
 
-    pub fn result(&self) -> Option<Vec<(String, f64)>> {
+    fn result(&self) -> Option<Vec<(String, f64)>> {
         match &self.state {
             State::Done(Status::Found) => Some(self.make_path()),
             _ => None,
@@ -257,7 +238,7 @@ impl RcBreadthFirstSearch {
 }
 
 // Private methods
-impl RcBreadthFirstSearch {
+impl RcDepthFirstSearch {
     fn make_path(&self) -> Vec<(String, f64)> {
         let mut path: Vec<(String, f64)> = Vec::new();
 
