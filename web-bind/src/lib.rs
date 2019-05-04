@@ -18,6 +18,9 @@ use canvas_state::CanvasState;
 use city::{City, Conn};
 use consts::*;
 
+// Runs when the page loads.
+// Creates the dynamic elements of the page.
+// Sets event listeners.
 #[wasm_bindgen(start)]
 pub fn run() -> Result<(), JsValue> {
     init_panic_hook();
@@ -59,13 +62,11 @@ pub fn run() -> Result<(), JsValue> {
     let (cities, connections) = map_nodes(&graph, canvas_height, canvas_width);
     let canvas_state = Rc::new(RefCell::new(CanvasState::new(cities, connections)));
 
-    // Make color key
     make_color_key(&document)?;
 
     // Draw initial canvas
     canvas_state.borrow().draw(&canvas, &context);
 
-    // Create tooltips
     setup_tooltips(
         &document,
         Rc::clone(&canvas),
@@ -73,7 +74,6 @@ pub fn run() -> Result<(), JsValue> {
         Rc::clone(&canvas_state),
     )?;
 
-    // Make cities list
     make_cities_list(
         &document,
         Rc::clone(&canvas),
@@ -96,6 +96,7 @@ pub fn run() -> Result<(), JsValue> {
     // leaks memory
     window_resize_listener.forget();
 
+    // Set search button click event listener
     let search_button = document
         .get_element_by_id("search-btn")
         .expect("document should contain search-btn element");
@@ -103,6 +104,8 @@ pub fn run() -> Result<(), JsValue> {
         .dyn_into::<web_sys::HtmlButtonElement>()
         .map_err(|_| ())
         .unwrap();
+    let is_searching = Rc::new(RefCell::new(false));
+    let search_stop = Rc::new(RefCell::new(false));
     let search_click_listener = make_search_button_listener(
         Rc::clone(&window),
         Rc::clone(&document),
@@ -110,13 +113,18 @@ pub fn run() -> Result<(), JsValue> {
         Rc::clone(&context),
         Rc::clone(&graph),
         Rc::clone(&canvas_state),
+        Rc::clone(&is_searching),
+        Rc::clone(&search_stop),
     );
     search_button.add_event_listener_with_callback(
         "click",
         search_click_listener.as_ref().unchecked_ref(),
     )?;
+
+    // leaks memory
     search_click_listener.forget();
 
+    // Set reset button click event listener
     let reset_button = document
         .get_element_by_id("reset-btn")
         .expect("document should contain reset-btn element");
@@ -128,6 +136,8 @@ pub fn run() -> Result<(), JsValue> {
         Rc::clone(&canvas),
         Rc::clone(&context),
         Rc::clone(&canvas_state),
+        Rc::clone(&is_searching),
+        Rc::clone(&search_stop),
     );
     reset_button.add_event_listener_with_callback(
         "click",
@@ -140,7 +150,7 @@ pub fn run() -> Result<(), JsValue> {
     Ok(())
 }
 
-/// Maps coordinates stored in the Graph to coordinates on the canvas
+// Maps coordinates stored in the Graph to coordinates on the canvas
 fn map_nodes(graph: &Graph, height: f64, width: f64) -> (HashMap<String, City>, HashSet<Conn>) {
     // These are the farthest points of the continential US
     let us_north: f64 = gstring_parse("49°23'04\"");
@@ -180,11 +190,12 @@ fn map_nodes(graph: &Graph, height: f64, width: f64) -> (HashMap<String, City>, 
     (mapped_nodes, connections)
 }
 
-/// Better wasm errors.
+// Better wasm errors.
 fn init_panic_hook() {
     console_error_panic_hook::set_once();
 }
 
+// Creates the tooltips seen when hovering over a node on the canvas.
 fn setup_tooltips(
     document: &web_sys::Document,
     canvas: Rc<web_sys::HtmlCanvasElement>,
@@ -266,7 +277,7 @@ fn setup_tooltips(
     Ok(())
 }
 
-/// Creates list of cities on left side of windows and adds a mouseover listener.
+// Creates list of cities on left side of windows and adds a mouseover listener.
 fn make_cities_list(
     document: &web_sys::Document,
     canvas: Rc<web_sys::HtmlCanvasElement>,
@@ -459,7 +470,7 @@ fn make_color_key(document: &web_sys::Document) -> Result<(), JsValue> {
     Ok(())
 }
 
-/// Adjust canvas size based on the window size.
+// Adjust canvas size based on the window size.
 fn make_window_resize_listener(
     window: Rc<web_sys::Window>,
     canvas: Rc<web_sys::HtmlCanvasElement>,
@@ -493,6 +504,8 @@ fn make_search_button_listener(
     context: Rc<web_sys::CanvasRenderingContext2d>,
     graph: Rc<Graph>,
     canvas_state: Rc<RefCell<CanvasState>>,
+    is_searching: Rc<RefCell<bool>>,
+    search_stop: Rc<RefCell<bool>>,
 ) -> Closure<(dyn FnMut(web_sys::Event) + 'static)> {
     let search_type = document
         .get_element_by_id("search-type")
@@ -525,6 +538,7 @@ fn make_search_button_listener(
 
     let document = Rc::clone(&document);
 
+    // Search button listener
     Closure::wrap(Box::new(move |_| {
         let src_in_value = src_in.value();
         let dest_in_value = dest_in.value();
@@ -555,14 +569,21 @@ fn make_search_button_listener(
                 search = Box::new(RefCell::new(
                     (*graph)
                         .clone()
-                        .rc_step_depth_first_search(&src_in_value, &dest_in_value),
+                        .step_depth_first_search(&src_in_value, &dest_in_value),
                 ));
             }
             "bfs" => {
                 search = Box::new(RefCell::new(
                     (*graph)
                         .clone()
-                        .rc_step_breadth_first_search(&src_in_value, &dest_in_value),
+                        .step_breadth_first_search(&src_in_value, &dest_in_value),
+                ));
+            }
+            "dijk" => {
+                search = Box::new(RefCell::new(
+                    (*graph)
+                        .clone()
+                        .step_shortest_path(&src_in_value, &dest_in_value),
                 ));
             }
             // all cases must be matched
@@ -572,15 +593,21 @@ fn make_search_button_listener(
                 search = Box::new(RefCell::new(
                     (*graph)
                         .clone()
-                        .rc_step_depth_first_search(&src_in_value, &dest_in_value),
+                        .step_depth_first_search(&src_in_value, &dest_in_value),
                 ));
             }
         }
 
+        // Stop current searches
+        if *is_searching.borrow() {
+            search_stop.replace(true);
+        }
+        is_searching.replace(true);
+
         // Variables to move to search closure
         let mut now = 0.0;
         let mut then = performance.now();
-        let interval = 1000.0;
+        let interval = consts::DEFAULT_SPEED;
         let mut delta = 0.0;
 
         let search_window = Rc::clone(&window);
@@ -589,18 +616,23 @@ fn make_search_button_listener(
         let context = Rc::clone(&context);
         let canvas_state = Rc::clone(&canvas_state);
         canvas_state.borrow_mut().reset();
+        let is_searching = Rc::clone(&is_searching);
+        let search_stop = Rc::clone(&search_stop);
+
+        let mut end = false;
+        let mut found = false;
 
         let f = Rc::new(RefCell::new(None));
         let g = f.clone();
-        let mut end = false;
-        let mut found = false;
 
         // Search closure
         *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
             now = performance.now();
             delta = now - then;
 
-            if end {
+            if end || *search_stop.borrow() {
+                is_searching.replace(false);
+                search_stop.replace(false);
                 let _ = f.borrow_mut().take();
                 return;
             }
@@ -721,8 +753,15 @@ fn make_reset_button_listener(
     canvas: Rc<web_sys::HtmlCanvasElement>,
     context: Rc<web_sys::CanvasRenderingContext2d>,
     canvas_state: Rc<RefCell<CanvasState>>,
+    is_searching: Rc<RefCell<bool>>,
+    search_stop: Rc<RefCell<bool>>,
 ) -> Closure<(dyn FnMut(web_sys::Event) + 'static)> {
     Closure::wrap(Box::new(move |_| {
+        // Stop ongoing searches
+        if *is_searching.borrow() {
+            search_stop.replace(true);
+        }
+
         canvas_state.borrow_mut().reset();
         canvas_state.borrow().draw(&canvas, &context);
     }) as Box<dyn FnMut(_)>)

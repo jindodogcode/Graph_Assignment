@@ -1,7 +1,7 @@
 pub mod bfs;
 pub mod dfs;
+pub mod dijk;
 
-use std::collections::HashSet;
 use std::rc::Rc;
 
 use std::fmt::{self, Display, Formatter};

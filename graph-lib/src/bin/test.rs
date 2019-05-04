@@ -1,6 +1,6 @@
 fn main() {
     let graph = graph_lib::make_graph();
-    let search_results = match graph.depth_first_search("Miami, FL", "Seattle, WA") {
+    let search_results = match graph.depth_first_search("Seattle, WA", "Miami, FL") {
         Ok(results) => results,
         Err(e) => {
             eprintln!("{}", e);
@@ -19,7 +19,7 @@ fn main() {
         }
     }
 
-    let bfs_results = match graph.breadth_first_search("Miami, FL", "Seattle, WA") {
+    let bfs_results = match graph.breadth_first_search("Seattle, WA", "Miami, FL") {
         Ok(results) => results,
         Err(e) => {
             eprintln!("{}J", e);
@@ -28,6 +28,25 @@ fn main() {
     };
 
     match bfs_results {
+        Some(results) => {
+            for (id, dist) in results.iter() {
+                println!("{}: {}", id, dist);
+            }
+        }
+        None => {
+            println!("None");
+        }
+    }
+
+    let dij_results = match graph.shortest_path("Seattle, WA", "Miami, FL") {
+        Ok(results) => results,
+        Err(e) => {
+            eprintln!("{}J", e);
+            return;
+        }
+    };
+
+    match dij_results {
         Some(results) => {
             for (id, dist) in results.iter() {
                 println!("{}: {}", id, dist);

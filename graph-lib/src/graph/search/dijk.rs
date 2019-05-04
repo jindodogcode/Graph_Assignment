@@ -1,39 +1,76 @@
-use std::collections::HashMap;
-use std::collections::HashSet;
+use ordered_float::NotNan;
+
+use std::cmp::{Ordering, Reverse};
+use std::collections::{BinaryHeap, HashMap};
+use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
 use crate::graph::search::{Search, State, Status};
 use crate::graph::Graph;
 
+#[derive(Debug, Eq)]
+struct Edge {
+    id: Rc<String>,
+    from: Rc<String>,
+    dist: Reverse<NotNan<f64>>,
+}
+
+impl PartialEq for Edge {
+    fn eq(&self, other: &Edge) -> bool {
+        self.dist == other.dist
+    }
+}
+
+impl PartialOrd for Edge {
+    fn partial_cmp(&self, other: &Edge) -> Option<Ordering> {
+        Some(self.dist.cmp(&other.dist))
+    }
+}
+
+impl Ord for Edge {
+    fn cmp(&self, other: &Edge) -> Ordering {
+        self.dist.cmp(&other.dist)
+    }
+}
+
+impl Hash for Edge {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
+}
+
+impl Edge {
+    fn new(id: Rc<String>, from: Rc<String>, dist: f64) -> Edge {
+        let dist = Reverse(NotNan::new(dist).unwrap());
+        Edge { id, from, dist }
+    }
+}
+
 #[derive(Debug)]
-pub struct DepthFirstSearch {
+pub struct ShortestPath {
     graph: Rc<Graph>,
     current: Rc<String>,
     dest: Rc<String>,
-    discovered: HashSet<Rc<String>>,
-    stack: Vec<(Rc<String>, (Rc<String>, f64))>,
+    queue: BinaryHeap<Edge>,
     visited: HashMap<Rc<String>, (Rc<String>, f64)>,
     state: State,
 }
 
 // Associate functions
-impl DepthFirstSearch {
-    pub fn new(graph: &Graph, start: &str, dest: &str) -> DepthFirstSearch {
+impl ShortestPath {
+    pub fn new(graph: &Graph, start: &str, dest: &str) -> ShortestPath {
         let graph = Rc::new(graph.clone());
         let start = Rc::new(graph.nodes()[start].id().to_owned());
         let dest = Rc::new(graph.nodes()[dest].id().to_owned());
         let empty = Rc::new("".to_owned());
-        let mut discovered = HashSet::new();
-        discovered.insert(Rc::clone(&start));
-        let mut stack = Vec::new();
-        stack.push((start, (Rc::clone(&empty), 0.0)));
+        let mut queue = BinaryHeap::new();
+        queue.push(Edge::new(start, Rc::clone(&empty), 0.0));
 
-        DepthFirstSearch {
+        ShortestPath {
             graph,
             current: Rc::clone(&empty),
             dest,
-            discovered,
-            stack,
+            queue,
             visited: HashMap::new(),
             state: State::Pop,
         }
@@ -41,15 +78,15 @@ impl DepthFirstSearch {
 }
 
 // Public methods
-impl Search for DepthFirstSearch {
+impl Search for ShortestPath {
     fn current(&self) -> &str {
         &self.current
     }
 
     fn visible(&self) -> Vec<(Rc<String>, (Rc<String>, f64))> {
-        self.stack
+        self.queue
             .iter()
-            .map(|(s1, (s2, f))| (Rc::clone(s1), (Rc::clone(s2), *f)))
+            .map(|Edge { id, from, dist }| (Rc::clone(id), (Rc::clone(from), *dist.0)))
             .collect()
     }
 
@@ -67,7 +104,7 @@ impl Search for DepthFirstSearch {
     fn next(&mut self) -> Status {
         match self.state {
             State::Pop => {
-                let (id, (from, dist)) = if let Some(path) = self.stack.pop() {
+                let Edge { id, from, dist } = if let Some(path) = self.queue.pop() {
                     path
                 } else {
                     let status = Status::NotFound;
@@ -76,7 +113,7 @@ impl Search for DepthFirstSearch {
                     return status;
                 };
                 if *id == *self.dest {
-                    self.visited.insert(id, (from, dist));
+                    self.visited.insert(id, (from, *dist.0));
                     let status = Status::Found;
                     self.state = State::Done(status);
 
@@ -84,23 +121,28 @@ impl Search for DepthFirstSearch {
                 }
 
                 self.current = Rc::clone(&id);
-                self.visited.insert(id, (from, dist));
+
+                if self.visited.contains_key(&id) && self.visited[&id].1 < *dist.0 {
+                    return Status::Searching;
+                }
+
+                self.visited.insert(id, (from, *dist.0));
                 self.state = State::Push;
                 return Status::Searching;
             }
             State::Push => {
                 for (id, dist) in self.graph.nodes()[&*self.current].edges().iter() {
-                    if self.discovered.contains(id) {
+                    let id = Rc::new(id.clone());
+
+                    if self.visited.contains_key(id.as_ref()) && self.visited[id.as_ref()].1 < *dist
+                    {
                         continue;
                     }
-                    let id = Rc::new(id.clone());
-                    self.discovered.insert(Rc::clone(&id));
-                    self.stack.push((
-                        Rc::clone(&id),
-                        (
-                            Rc::clone(&self.current),
-                            *dist + self.visited[self.current.as_ref()].1,
-                        ),
+
+                    self.queue.push(Edge::new(
+                        id,
+                        Rc::clone(&self.current),
+                        *dist + self.visited[self.current.as_ref()].1,
                     ));
                 }
 
@@ -122,7 +164,7 @@ impl Search for DepthFirstSearch {
 }
 
 // Private methods
-impl DepthFirstSearch {
+impl ShortestPath {
     fn make_path(&self) -> Vec<(String, f64)> {
         let mut path: Vec<(String, f64)> = Vec::new();
 

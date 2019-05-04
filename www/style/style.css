@@ -1,5 +1,5 @@
 body {
-    color: #ddd;
+    color: #eee;
     background-color: #333;
 }
 
@@ -70,14 +70,14 @@ main {
 
 #canvas {
     padding: 0;
-    background-color: #ddd;
+    background-color: #aaa;
     outline: 5px solid #000;
 }
 
 #tip-canvas {
     display: none;
     padding: 0;
-    background-color: #eee;
+    background-color: #ddd;
     outline: 1px solid #09c;
     margin: 0;
     position: absolute;

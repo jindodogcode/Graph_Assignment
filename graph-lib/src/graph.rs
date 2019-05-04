@@ -5,11 +5,10 @@ pub mod search;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
-use std::rc::Rc;
 
 use node::Node;
 use point::Point;
-use search::{bfs, dfs, Status};
+use search::{bfs, dfs, dijk, Search, Status};
 
 #[derive(Debug, Clone)]
 pub struct Graph {
@@ -99,16 +98,8 @@ impl Graph {
         Ok(search.result())
     }
 
-    pub fn step_depth_first_search<'b>(
-        &'b self,
-        start: &'b str,
-        end: &'b str,
-    ) -> dfs::DepthFirstSearch<'b> {
-        dfs::DepthFirstSearch::new(&self, start, end)
-    }
-
-    pub fn rc_step_depth_first_search(self, start: &str, end: &str) -> dfs::RcDepthFirstSearch {
-        dfs::RcDepthFirstSearch::new(Rc::new(self), start, end)
+    pub fn step_depth_first_search(&self, start: &str, end: &str) -> dfs::DepthFirstSearch {
+        dfs::DepthFirstSearch::new(self, start, end)
     }
 
     pub fn breadth_first_search(
@@ -127,16 +118,28 @@ impl Graph {
         Ok(search.result())
     }
 
-    pub fn step_breadth_first_search<'b>(
-        &'b self,
-        start: &'b str,
-        end: &'b str,
-    ) -> bfs::BreadthFirstSearch<'b> {
-        bfs::BreadthFirstSearch::new(&self, start, end)
+    pub fn step_breadth_first_search(&self, start: &str, end: &str) -> bfs::BreadthFirstSearch {
+        bfs::BreadthFirstSearch::new(self, start, end)
     }
 
-    pub fn rc_step_breadth_first_search(self, start: &str, end: &str) -> bfs::RcBreadthFirstSearch {
-        bfs::RcBreadthFirstSearch::new(Rc::new(self), start, end)
+    pub fn shortest_path(
+        &self,
+        start: &str,
+        end: &str,
+    ) -> Result<Option<Vec<(String, f64)>>, DoesNotContainError> {
+        if !self.nodes.contains_key(start) || !self.nodes.contains_key(end) {
+            return Err(DoesNotContainError);
+        }
+
+        let mut search = dijk::ShortestPath::new(&self, start, end);
+
+        while let Status::Searching = search.next() {}
+
+        Ok(search.result())
+    }
+
+    pub fn step_shortest_path(&self, start: &str, end: &str) -> dijk::ShortestPath {
+        dijk::ShortestPath::new(self, start, end)
     }
 }
 
