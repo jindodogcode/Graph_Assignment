@@ -1,71 +1,82 @@
-<html>
-    <head>
-        <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
-        <title>Assignment 6</title>
-        <link rel="stylesheet" href="style/style.css" type="text/css">
-    </head>
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+    <title>Assignment 6</title>
+    <link rel="stylesheet" href="style/style.css" type="text/css">
+  </head>
 
-    <body>
-        <header>
-            <h1>Assignment 6</h1>
-            <p id="mouseover-nodes-text">Mouse over nodes to see their name and coordinates.</p>
-            <p id="mouseover-names-text">Mouse over the names on the left to highlight the related node and connections.</p>
-        </header>
+  <body>
+    <header>
+      <h1>Assignment 6</h1>
+      <p id="mouseover-nodes-text">Mouse over nodes to see their name and coordinates.</p>
+      <p id="mouseover-names-text">Mouse over the names on the left to highlight the related node and connections.</p>
+    </header>
 
-        <main>
-            <aside id="left-sidebar" class="sidebar">
-                <div id="left-list-wrapper">
-                </div>
-            </aside>
-            <div>
-                <div id="canvas-wrapper">
-                    <div>
-                        <canvas id="canvas">
-                            Your browser does not support HTML canvases
-                        </canvas>
-                        <canvas id="tip-canvas" height="20"></canvas>
-                    </div>
-                </div>
-                <div id="color-key-wrapper">
-                    <p>Key:</p>
-                    <div id="color-key-list"></div>
-                </div>
-            </div>
-            <aside id="right-sidebar" class="sidebar">
-                <form>
-                    <p>
-                        <label for="search-type">
-                            <span>Type: </span>
-                        </label>
-                        </br>
-                        <select id="search-type">
-                            <option value="dfs">Depth First</option>
-                            <option value="bfs">Breadth First</option>
-                            <option value="dijk">Shortest Path</option>
-                        </select>
-                    </p>
-                    <p>
-                        <label for="src-in">
-                            <span>From: </span>
-                        </label>
-                        <br>
-                        <input type="text" id="src-in" value="Seattle, WA">
-                    </p>
-                    <p>
-                        <label for="dest-in">
-                            <span>To: </span>
-                        </label>
-                        <br>
-                        <input type="text" id="dest-in" value="Miami, FL">
-                    </p>
-                    <p>
-                        <button type="button" id="search-btn">Search</button>
-                        <button type="button" id="reset-btn">Reset</button>
-                    </p>
-                    <p id="search-error-text">Error finding input.</p>
-                </form>
-            </aside>
-        </main>
-    </body>
+    <main>
+
+      <aside id="left-sidebar" class="sidebar">
+        <div id="left-list-wrapper">
+        </div>
+      </aside>
+      
+      <div>
+        <div id="canvas-wrapper">
+          <div>
+            <canvas id="canvas">
+              Your browser does not support HTML canvases
+            </canvas>
+            <canvas id="tip-canvas" height="20"></canvas>
+          </div>
+        </div>
+        <div id="color-key-wrapper">
+          <p>Key:</p>
+          <div id="color-key-list"></div>
+        </div>
+      </div>
+
+      <aside id="right-sidebar" class="sidebar">
+        <form>
+
+          <p>
+            <label for="search-type">
+              <span>Type: </span>
+            </label>
+            </br>
+            <select id="search-type">
+              <option value="dfs">Depth First</option>
+              <option value="bfs">Breadth First</option>
+              <option value="dijk">Shortest Path</option>
+            </select>
+          </p>
+
+          <p>
+            <label for="src-in">
+              <span>From: </span>
+            </label>
+            <br>
+            <input type="text" id="src-in" value="Seattle, WA">
+          </p>
+
+          <p>
+            <label for="dest-in">
+              <span>To: </span>
+            </label>
+            <br>
+            <input type="text" id="dest-in" value="Miami, FL">
+          </p>
+
+          <p>
+            <button type="button" id="search-btn">Search</button>
+            <button type="button" id="reset-btn">Reset</button>
+          </p>
+
+          <p id="search-error-text">Error finding input.</p>
+
+        </form>
+      </aside>
+
+    </main>
+  </body>
 
 </html>
