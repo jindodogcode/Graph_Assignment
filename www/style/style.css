@@ -1,3 +1,8 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
 body {
   color: #eee;
   background-color: #333;
@@ -11,13 +16,11 @@ header {
 main {
   display: grid;
   grid-template-columns: 1fr 6fr 1fr;
+  margin: 0 20px;
 }
 
 #left-sidebar {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  margin-left: 10px;
+  width: 100%;
 }
 
 #left-list-wrapper {
@@ -87,13 +90,22 @@ main {
 }
 
 form {
-  width: 80%;
   padding: 0 1em;
   height: 100%;
 }
 
 form div {
   margin-bottom: 20px;
+}
+
+form div input {
+  max-width: 200px;
+  min-width: 100px;
+  width: 100%;
+}
+
+#form-buttons {
+  display: flex;
 }
 
 #search-error-text {

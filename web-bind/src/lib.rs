@@ -48,11 +48,11 @@ pub fn run() -> Result<(), JsValue> {
 
     // Assign canvas dimensions
     let win_width = window.inner_width().unwrap().as_f64().unwrap();
-    let canvas_width = win_width * (2.0 / 3.0);
+    let canvas_width = win_width * (19.0 / 30.0);
     canvas
         .set_attribute("width", &canvas_width.to_string())
         .unwrap();
-    let canvas_height = win_width / 3.2;
+    let canvas_height = canvas_width / 2.110_448_79;
     canvas
         .set_attribute("height", &canvas_height.to_string())
         .unwrap();
@@ -480,11 +480,11 @@ fn make_window_resize_listener(
 ) -> Closure<(dyn FnMut(web_sys::Event) + 'static)> {
     Closure::wrap(Box::new(move |_| {
         let win_width = window.inner_width().unwrap().as_f64().unwrap();
-        let canvas_width = win_width * (2.0 / 3.0);
+        let canvas_width = win_width * (19.0 / 30.0);
         canvas
             .set_attribute("width", &canvas_width.to_string())
             .unwrap();
-        let canvas_height = win_width / 3.2;
+        let canvas_height = canvas_width / 2.110_448_79;
         canvas
             .set_attribute("height", &canvas_height.to_string())
             .unwrap();

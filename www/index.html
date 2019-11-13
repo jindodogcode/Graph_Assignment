@@ -12,8 +12,12 @@
 
     <header>
       <h1>Graph USA</h1>
-      <p id="mouseover-nodes-text">Mouse over nodes to see their name and coordinates.</p>
-      <p id="mouseover-names-text">Mouse over the names on the left to highlight the related node and connections.</p>
+      <p id="mouseover-nodes-text">
+        Mouse over nodes to see their name and coordinates.
+      </p>
+      <p id="mouseover-names-text">
+        Mouse over the names on the left to highlight the related node and connections.
+      </p>
     </header>
 
     <main>
@@ -23,7 +27,7 @@
         </div>
       </aside>
       
-      <div>
+      <div id="main-display">
         <div id="canvas-wrapper">
           <div>
             <canvas id="canvas">
@@ -69,7 +73,7 @@
             <input type="text" id="dest-in" value="Miami, FL">
           </div>
 
-          <div>
+          <div id="form-buttons">
             <button type="button" id="search-btn">Search</button>
             <button type="button" id="reset-btn">Reset</button>
           </div>
