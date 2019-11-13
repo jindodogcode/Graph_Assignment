@@ -1,12 +1,8 @@
-/target
 **/*.rs.bk
-Cargo.lock
 /www/dist
 /www/node_modules
 /www/package-lock.json
-/www/web_bind_bg.d.ts
-/www/web_bind_bg.wasm
-/www/web_bind.d.ts
-/www/web_bind.js
 /web-bind/target
+/web-bind/pkg
 /graph-lib/target
+

@@ -3,16 +3,15 @@
 <html lang="en">
 
   <head>
-    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Assignment 6</title>
-    <link rel="stylesheet" href="style/style.css" type="text/css">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Graph USA</title>
   </head>
 
   <body>
 
     <header>
-      <h1>Assignment 6</h1>
+      <h1>Graph USA</h1>
       <p id="mouseover-nodes-text">Mouse over nodes to see their name and coordinates.</p>
       <p id="mouseover-names-text">Mouse over the names on the left to highlight the related node and connections.</p>
     </header>
@@ -42,7 +41,7 @@
       <aside id="right-sidebar" class="sidebar">
         <form>
 
-          <p>
+          <div>
             <label for="search-type">
               <span>Type: </span>
             </label>
@@ -52,28 +51,28 @@
               <option value="bfs">Breadth First</option>
               <option value="dijk">Shortest Path</option>
             </select>
-          </p>
+          </div>
 
-          <p>
+          <div>
             <label for="src-in">
               <span>From: </span>
             </label>
             <br>
             <input type="text" id="src-in" value="Seattle, WA">
-          </p>
+          </div>
 
-          <p>
+          <div>
             <label for="dest-in">
               <span>To: </span>
             </label>
             <br>
             <input type="text" id="dest-in" value="Miami, FL">
-          </p>
+          </div>
 
-          <p>
+          <div>
             <button type="button" id="search-btn">Search</button>
             <button type="button" id="reset-btn">Reset</button>
-          </p>
+          </div>
 
           <p id="search-error-text">Error finding input.</p>
 

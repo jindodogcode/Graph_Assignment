@@ -27,11 +27,11 @@ Javascript.
 - The rust compiler and tools: https://www.rust-lang.org/tools/install
 - Node and NPM: https://www.npmjs.com/get-npm
 - WebAssembly target for Rust: terminal: rustup target add wasm32-unknown-unknown
-- Install JS binding generator: cargo install wasm-bindgen-cli
+- wasm-pack(https://github.com/rustwasm/wasm-pack) 
 - Go to the www directory and run: npm install
-- From the project root directory: build.sh
+- npm run build
 
 ## Run
 
-- cargo install basic-http-server
-- ./serve.sh
+- cd www
+- npm run serve
